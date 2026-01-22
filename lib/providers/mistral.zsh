@@ -1,9 +1,9 @@
 #!/usr/bin/env zsh
 
-# Anthropic Claude API provider for zsh-ai
+# Mistral AI API provider for zsh-ai
 
-# Function to call Anthropic API
-_zsh_ai_query_anthropic() {
+# Function to call Mistral API
+_zsh_ai_query_mistral() {
     local query="$1"
     local response
     
@@ -15,47 +15,51 @@ _zsh_ai_query_anthropic() {
     
     # Prepare the JSON payload - escape quotes in the query
     local escaped_query=$(_zsh_ai_escape_json "$query")
+
     local json_payload=$(cat <<EOF
 {
-    "model": "$ZSH_AI_ANTHROPIC_MODEL",
-    "max_tokens": 256,
-    "system": "$escaped_system_prompt",
+    "model": "${ZSH_AI_MISTRAL_MODEL}",
     "messages": [
+        {
+            "role": "system",
+            "content": "$escaped_system_prompt"
+        },
         {
             "role": "user",
             "content": "$escaped_query"
         }
-    ]
+    ],
+    "max_tokens": 256,
+    "temperature": 0.3
 }
 EOF
 )
     
     # Call the API
-    response=$(curl -s "${ZSH_AI_ANTHROPIC_URL}" \
-        --header "x-api-key: $ANTHROPIC_API_KEY" \
-        --header "anthropic-version: 2023-06-01" \
+    response=$(curl -s "${ZSH_AI_MISTRAL_URL}" \
+        --header "Authorization: Bearer $MISTRAL_API_KEY" \
         --header "content-type: application/json" \
         --data "$json_payload" 2>&1)
     
     if [[ $? -ne 0 ]]; then
-        echo "Error: Failed to connect to Anthropic API"
+        printf "%s" "Error: Failed to connect to Mistral API"
         return 1
     fi
     
     # Debug: Uncomment to see raw response
-    # echo "DEBUG: Raw response: $response" >&2
+    # printf "%s" "DEBUG: Raw response: $response" >&2
     
     # Extract the content from the response
     # Try using jq if available, otherwise fall back to sed/grep
     if command -v jq &> /dev/null; then
-        local result=$(printf "%s" "$response" | jq -r '.content[0].text // empty' 2>/dev/null)
+        local result=$(printf "%s" "$response" | jq -r '.choices[0].message.content // empty' 2>/dev/null)
         if [[ -z "$result" ]]; then
             # Check for error message
             local error=$(printf "%s" "$response" | jq -r '.error.message // empty' 2>/dev/null)
             if [[ -n "$error" ]]; then
-                echo "API Error: $error"
+                printf "%s" "API Error: $error"
             else
-                echo "Error: Unable to parse response"
+                printf "%s" "Error: Unable to parse response"
             fi
             return 1
         fi
@@ -65,20 +69,20 @@ EOF
         printf "%s" "$result"
     else
         # Fallback parsing without jq - handle responses with newlines
-        # Use sed to extract the text field, handling potential newlines
-        local result=$(printf "%s" "$response" | sed -n 's/.*"text":"\([^"]*\)".*/\1/p' | head -1)
-
+        # Use sed to extract the content field, handling potential newlines
+        local result=$(printf "%s" "$response" | sed -n 's/.*"content":"\([^"]*\)".*/\1/p' | head -1)
+        
         # If the simple extraction failed, try a more complex approach for multiline responses
         if [[ -z "$result" ]]; then
-            # Extract text field even if it contains escaped newlines
-            result=$(printf "%s" "$response" | perl -0777 -ne 'print $1 if /"text":"((?:[^"\\]|\\.)*)"/s' 2>/dev/null)
+            # Extract content field even if it contains escaped newlines
+            result=$(printf "%s" "$response" | perl -0777 -ne 'print $1 if /"content":"((?:[^"\\]|\\.)*)"/s' 2>/dev/null)
         fi
-
+        
         if [[ -z "$result" ]]; then
-            echo "Error: Unable to parse response (install jq for better reliability)"
+            printf "%s" "Error: Unable to parse response (install jq for better reliability)"
             return 1
         fi
-
+        
         # Unescape JSON string (handle \n, \t, etc.) and clean up
         result=$(printf "%s" "$result" | sed 's/\\n/\n/g; s/\\t/\t/g; s/\\r/\r/g; s/\\"/"/g; s/\\\\/\\/g')
         # Remove trailing newlines and spaces

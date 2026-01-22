@@ -3,26 +3,26 @@
 # Load test helper
 source "${0:A:h:h}/test_helper.zsh"
 
-# Load the context and anthropic provider modules
+# Load the context and mistral provider modules
 source "$PLUGIN_DIR/lib/utils.zsh"
 source "$PLUGIN_DIR/lib/context.zsh"
-source "$PLUGIN_DIR/lib/providers/anthropic.zsh"
+source "$PLUGIN_DIR/lib/providers/mistral.zsh"
 
 # Test functions
 
 test_successful_api_call_with_jq() {
     setup_test_env
-    export ANTHROPIC_API_KEY="test-api-key"
+    export MISTRAL_API_KEY="test-api-key"
     
     # Mock jq as available
     mock_jq "true"
     
     # Mock successful curl response
-    local mock_response='{"content":[{"text":"ls -la"}]}'
+    local mock_response='{"choices":[{"message":{"content":"ls -la"}}]}'
     mock_curl_response "$mock_response" 0
     
     local output
-    output=$(_zsh_ai_query_anthropic "list all files")
+    output=$(_zsh_ai_query_mistral "list all files")
     local result=$?
     
     assert_equals "$result" "0"
@@ -33,17 +33,17 @@ test_successful_api_call_with_jq() {
 
 test_successful_api_call_without_jq() {
     setup_test_env
-    export ANTHROPIC_API_KEY="test-api-key"
+    export MISTRAL_API_KEY="test-api-key"
     
     # Mock jq as unavailable
     mock_jq "false"
     
     # Mock successful curl response
-    local mock_response='{"content":[{"text":"cd /home/user"}]}'
+    local mock_response='{"choices":[{"message":{"content":"cd /home/user"}}]}'
     mock_curl_response "$mock_response" 0
     
     local output
-    output=$(_zsh_ai_query_anthropic "go to home directory")
+    output=$(_zsh_ai_query_mistral "go to home directory")
     local result=$?
     
     assert_equals "$result" "0"
@@ -54,7 +54,7 @@ test_successful_api_call_without_jq() {
 
 test_handles_api_error_response_with_jq() {
     setup_test_env
-    export ANTHROPIC_API_KEY="test-api-key"
+    export MISTRAL_API_KEY="test-api-key"
     
     # Mock jq as available
     mock_jq "true"
@@ -64,7 +64,7 @@ test_handles_api_error_response_with_jq() {
     mock_curl_response "$mock_response" 0
     
     local output
-    output=$(_zsh_ai_query_anthropic "test query")
+    output=$(_zsh_ai_query_mistral "test query")
     local result=$?
     
     assert_equals "$result" "1"
@@ -75,24 +75,24 @@ test_handles_api_error_response_with_jq() {
 
 test_handles_curl_connection_failure() {
     setup_test_env
-    export ANTHROPIC_API_KEY="test-api-key"
+    export MISTRAL_API_KEY="test-api-key"
     
     # Mock curl failure
     mock_command "curl" "" 1
     
     local output
-    output=$(_zsh_ai_query_anthropic "test query")
+    output=$(_zsh_ai_query_mistral "test query")
     local result=$?
     
     assert_equals "$result" "1"
-    assert_contains "$output" "Failed to connect to Anthropic API"
+    assert_contains "$output" "Failed to connect to Mistral API"
     
     teardown_test_env
 }
 
 test_handles_empty_response_with_jq() {
     setup_test_env
-    export ANTHROPIC_API_KEY="test-api-key"
+    export MISTRAL_API_KEY="test-api-key"
     
     # Mock jq as available
     mock_jq "true"
@@ -102,7 +102,7 @@ test_handles_empty_response_with_jq() {
     mock_curl_response "$mock_response" 0
     
     local output
-    output=$(_zsh_ai_query_anthropic "test query")
+    output=$(_zsh_ai_query_mistral "test query")
     local result=$?
     
     assert_equals "$result" "1"
@@ -113,7 +113,7 @@ test_handles_empty_response_with_jq() {
 
 test_handles_malformed_response_without_jq() {
     setup_test_env
-    export ANTHROPIC_API_KEY="test-api-key"
+    export MISTRAL_API_KEY="test-api-key"
     
     # Mock jq as unavailable
     mock_jq "false"
@@ -123,7 +123,7 @@ test_handles_malformed_response_without_jq() {
     mock_curl_response "$mock_response" 0
     
     local output
-    output=$(_zsh_ai_query_anthropic "test query")
+    output=$(_zsh_ai_query_mistral "test query")
     local result=$?
     
     assert_equals "$result" "1"
@@ -135,20 +135,20 @@ test_handles_malformed_response_without_jq() {
 
 test_escapes_quotes_in_query() {
     setup_test_env
-    export ANTHROPIC_API_KEY="test-api-key"
+    export MISTRAL_API_KEY="test-api-key"
     
     # Mock jq as available
     mock_jq "true"
     
     # Mock successful response
-    local mock_response='{"content":[{"text":"echo \"Hello World\""}]}'
+    local mock_response='{"choices":[{"message":{"content":"echo \"Hello World\""}}]}'
     mock_curl_response "$mock_response" 0
     
     # Capture the actual curl call to verify escaping
     mock_command "curl" "$mock_response" 0
     
     local output
-    output=$(_zsh_ai_query_anthropic 'print "Hello World"')
+    output=$(_zsh_ai_query_mistral 'print "Hello World"')
     local result=$?
     
     assert_equals "$result" "0"
@@ -158,7 +158,7 @@ test_escapes_quotes_in_query() {
 
 test_includes_context_in_api_call() {
     setup_test_env
-    export ANTHROPIC_API_KEY="test-api-key"
+    export MISTRAL_API_KEY="test-api-key"
     
     # Mock jq as available
     mock_jq "true"
@@ -169,11 +169,11 @@ test_includes_context_in_api_call() {
     touch package.json
     
     # Mock successful response
-    local mock_response='{"content":[{"text":"npm install"}]}'
+    local mock_response='{"choices":[{"message":{"content":"npm install"}}]}'
     mock_curl_response "$mock_response" 0
     
     local output
-    output=$(_zsh_ai_query_anthropic "install dependencies")
+    output=$(_zsh_ai_query_mistral "install dependencies")
     local result=$?
     
     assert_equals "$result" "0"
@@ -186,17 +186,17 @@ test_includes_context_in_api_call() {
 
 test_uses_correct_api_headers() {
     setup_test_env
-    export ANTHROPIC_API_KEY="test-api-key"
+    export MISTRAL_API_KEY="test-api-key"
     
     # Mock jq as available
     mock_jq "true"
     
     # Mock curl to capture the command
     local captured_args=""
-    mock_command "curl" '{"content":[{"text":"ls"}]}' 0
+    mock_command "curl" '{"choices":[{"message":{"content":"ls"}}]}' 0
     
     local output
-    output=$(_zsh_ai_query_anthropic "list files")
+    output=$(_zsh_ai_query_mistral "list files")
     local result=$?
     
     assert_equals "$result" "0"
@@ -206,17 +206,18 @@ test_uses_correct_api_headers() {
 
 test_uses_correct_model() {
     setup_test_env
-    export ANTHROPIC_API_KEY="test-api-key"
+    export MISTRAL_API_KEY="test-api-key"
+    export ZSH_AI_MISTRAL_MODEL="mistral-small-latest"
     
     # Mock jq as available
     mock_jq "true"
     
     # Mock successful response
-    local mock_response='{"content":[{"text":"pwd"}]}'
+    local mock_response='{"choices":[{"message":{"content":"pwd"}}]}'
     mock_curl_response "$mock_response" 0
     
     local output
-    output=$(_zsh_ai_query_anthropic "show current directory")
+    output=$(_zsh_ai_query_mistral "show current directory")
     local result=$?
     
     assert_equals "$result" "0"
@@ -227,7 +228,7 @@ test_uses_correct_model() {
 
 test_handles_multiline_context_properly() {
     setup_test_env
-    export ANTHROPIC_API_KEY="test-api-key"
+    export MISTRAL_API_KEY="test-api-key"
     
     # Mock jq as available
     mock_jq "true"
@@ -238,11 +239,11 @@ test_handles_multiline_context_properly() {
     touch file1.txt file2.txt file3.txt
     
     # Mock successful response
-    local mock_response='{"content":[{"text":"ls -la"}]}'
+    local mock_response='{"choices":[{"message":{"content":"ls -la"}}]}'
     mock_curl_response "$mock_response" 0
     
     local output
-    output=$(_zsh_ai_query_anthropic "list all files")
+    output=$(_zsh_ai_query_mistral "list all files")
     local result=$?
     
     assert_equals "$result" "0"
@@ -255,17 +256,17 @@ test_handles_multiline_context_properly() {
 
 test_handles_response_with_escaped_newline_with_jq() {
     setup_test_env
-    export ANTHROPIC_API_KEY="test-api-key"
+    export MISTRAL_API_KEY="test-api-key"
     
     # Mock jq as available
     mock_jq "true"
     
     # Mock response with escaped newline (trailing newline that should be removed)
-    local mock_response='{"content":[{"text":"ls -la\n"}]}'
+    local mock_response='{"choices":[{"message":{"content":"ls -la\n"}}]}'
     mock_curl_response "$mock_response" 0
     
     local output
-    output=$(_zsh_ai_query_anthropic "list files")
+    output=$(_zsh_ai_query_mistral "list files")
     local result=$?
     
     assert_equals "$result" "0"
@@ -276,17 +277,17 @@ test_handles_response_with_escaped_newline_with_jq() {
 
 test_handles_response_with_escaped_newline_without_jq() {
     setup_test_env
-    export ANTHROPIC_API_KEY="test-api-key"
+    export MISTRAL_API_KEY="test-api-key"
     
     # Mock jq as unavailable
     mock_jq "false"
     
     # Mock response with escaped newline
-    local mock_response='{"content":[{"text":"pwd\n"}]}'
+    local mock_response='{"choices":[{"message":{"content":"pwd\n"}}]}'
     mock_curl_response "$mock_response" 0
     
     local output
-    output=$(_zsh_ai_query_anthropic "show current directory")
+    output=$(_zsh_ai_query_mistral "show current directory")
     local result=$?
     
     assert_equals "$result" "0"
@@ -295,30 +296,8 @@ test_handles_response_with_escaped_newline_without_jq() {
     teardown_test_env
 }
 
-test_uses_correct_url_from_config() {
-    setup_test_env
-    export ANTHROPIC_API_KEY="test-api-key"
-    export ZSH_AI_ANTHROPIC_URL="https://custom-proxy.example.com/v1/messages"
-    
-    # Mock jq as available
-    mock_jq "true"
-    
-    # Mock successful response
-    local mock_response='{"content":[{"text":"ls -la"}]}'
-    mock_curl_response "$mock_response" 0
-    
-    local output
-    output=$(_zsh_ai_query_anthropic "list files")
-    local result=$?
-    
-    assert_equals "$result" "0"
-    assert_equals "$output" "ls -la"
-    
-    teardown_test_env
-}
-
 # Run tests
-echo "Running anthropic provider tests..."
+echo "Running mistral provider tests..."
 test_successful_api_call_with_jq && echo "✓ Successful API call with jq available"
 test_successful_api_call_without_jq && echo "✓ Successful API call without jq"
 test_handles_api_error_response_with_jq && echo "✓ Handles API error response with jq"
@@ -332,4 +311,4 @@ test_uses_correct_model && echo "✓ Uses correct model"
 test_handles_multiline_context_properly && echo "✓ Handles multiline context properly"
 test_handles_response_with_escaped_newline_with_jq && echo "✓ Handles response with escaped newline (with jq)"
 test_handles_response_with_escaped_newline_without_jq && echo "✓ Handles response with escaped newline (without jq)"
-test_uses_correct_url_from_config && echo "✓ Uses correct URL from config"
+
