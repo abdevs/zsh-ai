@@ -4,17 +4,19 @@
 
 # Custom widget to intercept Enter key
 _zsh_ai_accept_line() {
-    # Check if the line starts with "# " and handle multiline input
-    if [[ "$BUFFER" =~ ^'# ' ]]; then
+    local trigger="${ZSH_AI_TRIGGER:-# }"
+
+    # Check if the line starts with the configured trigger and handle multiline input
+    if [[ "$BUFFER" == "$trigger"* ]]; then
         # Check if buffer contains newlines (multiline command)
         if [[ "$BUFFER" == *$'\n'* ]]; then
             # Multiline command detected - execute normally without AI processing
             zle .accept-line
             return
         fi
-        
-        # Extract the query (remove the "# " prefix)
-        local query="${BUFFER:2}"
+
+        # Extract the query (remove the trigger prefix)
+        local query="${BUFFER#"$trigger"}"
         
         # Add a loading indicator with animation
         local saved_buffer="$BUFFER"
@@ -28,7 +30,7 @@ _zsh_ai_accept_line() {
         local tmpfile=$(mktemp)
         
         # Disable job control notifications
-        setopt local_options no_monitor no_notify
+        setopt local_options no_monitor no_notify no_bg_nice
         
         # Start the API query in background using the shared function
         # Only redirect stdout to tmpfile, let stderr go to /dev/null to avoid mixing error output
@@ -44,12 +46,15 @@ _zsh_ai_accept_line() {
             zle -R && sleep 0.1
         done
         
+        # Reap the background job so it doesn't linger in the job table
+        wait $pid 2>/dev/null
+        local exit_code=$?
+
         # Get the response
         local cmd=$(cat "$tmpfile")
-        local exit_code=$?
         rm -f "$tmpfile"
         
-        if [[ -n "$cmd" ]] && [[ "$cmd" != "Error:"* ]] && [[ "$cmd" != "API Error:"* ]]; then
+        if [[ $exit_code -eq 0 ]] && [[ -n "$cmd" ]] && [[ "$cmd" != "Error:"* ]] && [[ "$cmd" != "API Error:"* ]]; then
             # Simply replace the buffer with the generated command
             BUFFER="$cmd"
 
@@ -84,6 +89,10 @@ _zsh_ai_accept_line() {
 # Uses precmd hook to defer registration until ZLE is fully initialized
 # This fixes the issue where zle -N fails silently during plugin sourcing
 _zsh_ai_init_widget() {
+    # Respect the toggle: when disabled, never intercept accept-line so the
+    # inline trigger (default "# ") behaves like a normal shell comment.
+    _zsh_ai_comment_hook_enabled || return
+
     _zsh_ai_do_init() {
         zle -N accept-line _zsh_ai_accept_line
         add-zsh-hook -d precmd _zsh_ai_do_init

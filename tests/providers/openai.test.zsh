@@ -32,7 +32,7 @@ EOF
 
 test_openai_query_success() {
     export OPENAI_API_KEY="test-key"
-    export ZSH_AI_OPENAI_MODEL="gpt-4o"
+    export ZSH_AI_OPENAI_MODEL="gpt-5.4-mini"
 
     local result=$(_zsh_ai_query_openai "list files")
     assert_equals "$result" "ls -la"
@@ -40,7 +40,7 @@ test_openai_query_success() {
 
 test_openai_query_error_response() {
     export OPENAI_API_KEY="test-key"
-    export ZSH_AI_OPENAI_MODEL="gpt-4o"
+    export ZSH_AI_OPENAI_MODEL="gpt-5.4-mini"
     
     # Override curl to return an error
     curl() {
@@ -63,7 +63,7 @@ EOF
 
 test_openai_json_escaping() {
     export OPENAI_API_KEY="test-key"
-    export ZSH_AI_OPENAI_MODEL="gpt-4o"
+    export ZSH_AI_OPENAI_MODEL="gpt-5.4-mini"
     
     # Test with special characters
     local result=$(_zsh_ai_query_openai "test \"quotes\" and \$variables")
@@ -73,7 +73,7 @@ test_openai_json_escaping() {
 
 test_handles_response_with_newline() {
     export OPENAI_API_KEY="test-key"
-    export ZSH_AI_OPENAI_MODEL="gpt-4o"
+    export ZSH_AI_OPENAI_MODEL="gpt-5.4-mini"
     export ZSH_AI_OPENAI_URL="https://api.openai.com/v1/chat/completions"
 
     # Override curl to return response with newline
@@ -101,7 +101,7 @@ EOF
 
 test_handles_response_without_jq() {
     export OPENAI_API_KEY="test-key"
-    export ZSH_AI_OPENAI_MODEL="gpt-4o"
+    export ZSH_AI_OPENAI_MODEL="gpt-5.4-mini"
 
     # Mock jq as unavailable
     command() {
@@ -148,9 +148,10 @@ test_uses_perplexity_url() {
     assert_equals "$ZSH_AI_OPENAI_URL" "https://api.perplexity.ai/chat/completions"
 }
 
-test_uses_max_tokens_for_gpt4_models() {
+capture_openai_payload_for_model() {
+    local model="$1"
     export OPENAI_API_KEY="test-key"
-    export ZSH_AI_OPENAI_MODEL="gpt-4o"
+    export ZSH_AI_OPENAI_MODEL="$model"
     export ZSH_AI_OPENAI_URL="https://api.openai.com/v1/chat/completions"
     local payload_file=$(mktemp)
 
@@ -173,112 +174,55 @@ test_uses_max_tokens_for_gpt4_models() {
     _zsh_ai_query_openai "test" >/dev/null
     local captured_payload=$(cat "$payload_file")
     rm -f "$payload_file"
+    printf "%s" "$captured_payload"
+}
+
+test_uses_max_tokens_for_gpt4_models() {
+    local captured_payload=$(capture_openai_payload_for_model "gpt-4o-mini")
     assert_contains "$captured_payload" '"max_tokens"'
 }
 
 test_uses_max_tokens_for_gpt35_models() {
-    export OPENAI_API_KEY="test-key"
-    export ZSH_AI_OPENAI_MODEL="gpt-3.5-turbo"
-    export ZSH_AI_OPENAI_URL="https://api.openai.com/v1/chat/completions"
-    local payload_file=$(mktemp)
-
-    curl() {
-        if [[ "$*" == *"https://api.openai.com/v1/chat/completions"* ]]; then
-            local prev_arg=""
-            for arg in "$@"; do
-                if [[ "$prev_arg" == "--data" ]]; then
-                    echo "$arg" > "$payload_file"
-                    break
-                fi
-                prev_arg="$arg"
-            done
-            echo '{"choices":[{"message":{"content":"test"}}]}'
-            return 0
-        fi
-        command curl "$@"
-    }
-
-    _zsh_ai_query_openai "test" >/dev/null
-    local captured_payload=$(cat "$payload_file")
-    rm -f "$payload_file"
+    local captured_payload=$(capture_openai_payload_for_model "gpt-3.5-turbo")
     assert_contains "$captured_payload" '"max_tokens"'
 }
 
 test_uses_max_completion_tokens_for_gpt5_models() {
-    export OPENAI_API_KEY="test-key"
-    export ZSH_AI_OPENAI_MODEL="gpt-5-nano"
-    export ZSH_AI_OPENAI_URL="https://api.openai.com/v1/chat/completions"
-    local payload_file=$(mktemp)
-
-    curl() {
-        if [[ "$*" == *"https://api.openai.com/v1/chat/completions"* ]]; then
-            local prev_arg=""
-            for arg in "$@"; do
-                if [[ "$prev_arg" == "--data" ]]; then
-                    echo "$arg" > "$payload_file"
-                    break
-                fi
-                prev_arg="$arg"
-            done
-            echo '{"choices":[{"message":{"content":"test"}}]}'
-            return 0
-        fi
-        command curl "$@"
-    }
-
-    _zsh_ai_query_openai "test" >/dev/null
-    local captured_payload=$(cat "$payload_file")
-    rm -f "$payload_file"
+    local captured_payload=$(capture_openai_payload_for_model "gpt-5-nano")
     assert_contains "$captured_payload" '"max_completion_tokens"'
 }
 
 test_uses_max_completion_tokens_for_o1_models() {
-    export OPENAI_API_KEY="test-key"
-    export ZSH_AI_OPENAI_MODEL="o1-preview"
-    export ZSH_AI_OPENAI_URL="https://api.openai.com/v1/chat/completions"
-    local payload_file=$(mktemp)
-
-    curl() {
-        if [[ "$*" == *"https://api.openai.com/v1/chat/completions"* ]]; then
-            local prev_arg=""
-            for arg in "$@"; do
-                if [[ "$prev_arg" == "--data" ]]; then
-                    echo "$arg" > "$payload_file"
-                    break
-                fi
-                prev_arg="$arg"
-            done
-            echo '{"choices":[{"message":{"content":"test"}}]}'
-            return 0
-        fi
-        command curl "$@"
-    }
-
-    _zsh_ai_query_openai "test" >/dev/null
-    local captured_payload=$(cat "$payload_file")
-    rm -f "$payload_file"
+    local captured_payload=$(capture_openai_payload_for_model "o1-preview")
     assert_contains "$captured_payload" '"max_completion_tokens"'
 }
 
-# Add missing assert_not_empty function
-assert_not_empty() {
-    [[ -n "$1" ]]
+test_omits_temperature_for_gpt5_models() {
+    local captured_payload=$(capture_openai_payload_for_model "gpt-5.4-mini")
+    assert_not_contains "$captured_payload" '"temperature"'
+}
+
+test_includes_temperature_for_gpt4_models() {
+    local captured_payload=$(capture_openai_payload_for_model "gpt-4o-mini")
+    assert_contains "$captured_payload" '"temperature": 0.3'
 }
 
 # Run tests
 echo "Running OpenAI provider tests..."
-test_openai_query_success && echo "✓ OpenAI query success"
-test_openai_query_error_response && echo "✓ OpenAI error response handling"
-test_openai_json_escaping && echo "✓ OpenAI JSON escaping"
-test_handles_response_with_newline && echo "✓ Handles response with trailing newline"
-test_handles_response_without_jq && echo "✓ Handles response without jq and with newline"
-test_uses_default_url_when_not_configured && echo "✓ Uses default URL when not configured"
-test_uses_custom_url_when_configured && echo "✓ Uses custom URL when configured"
-test_uses_perplexity_url && echo "✓ Uses Perplexity URL"
-test_uses_max_tokens_for_gpt4_models && echo "✓ Uses max_tokens for gpt-4 models"
-test_uses_max_tokens_for_gpt35_models && echo "✓ Uses max_tokens for gpt-3.5 models"
-test_uses_max_completion_tokens_for_gpt5_models && echo "✓ Uses max_completion_tokens for gpt-5 models"
-test_uses_max_completion_tokens_for_o1_models && echo "✓ Uses max_completion_tokens for o1 models"
+run_test "OpenAI query success" test_openai_query_success
+run_test "OpenAI error response handling" test_openai_query_error_response
+run_test "OpenAI JSON escaping" test_openai_json_escaping
+run_test "Handles response with trailing newline" test_handles_response_with_newline
+run_test "Handles response without jq and with newline" test_handles_response_without_jq
+run_test "Uses default URL when not configured" test_uses_default_url_when_not_configured
+run_test "Uses custom URL when configured" test_uses_custom_url_when_configured
+run_test "Uses Perplexity URL" test_uses_perplexity_url
+run_test "Uses max_tokens for gpt-4 models" test_uses_max_tokens_for_gpt4_models
+run_test "Uses max_tokens for gpt-3.5 models" test_uses_max_tokens_for_gpt35_models
+run_test "Uses max_completion_tokens for gpt-5 models" test_uses_max_completion_tokens_for_gpt5_models
+run_test "Uses max_completion_tokens for o1 models" test_uses_max_completion_tokens_for_o1_models
+run_test "Omits temperature for gpt-5 models" test_omits_temperature_for_gpt5_models
+run_test "Includes temperature for gpt-4 models" test_includes_temperature_for_gpt4_models
 
 # Tests for keyless OpenAI-compatible endpoints
 echo ""
@@ -286,11 +230,13 @@ echo "Running OpenAI-compatible (keyless) tests..."
 
 test_openai_requires_key_for_default_url() {
     unset OPENAI_API_KEY
+    unset ZSH_AI_OPENAI_API_KEY
     export ZSH_AI_PROVIDER="openai"
     # Explicitly set to default URL to ensure test works
     export ZSH_AI_OPENAI_URL="https://api.openai.com/v1/chat/completions"
 
-    local result=$(_zsh_ai_validate_config 2>&1)
+    local result
+    result=$(_zsh_ai_validate_config 2>&1)
     local exit_code=$?
 
     assert_equals "$exit_code" "1"
@@ -299,10 +245,12 @@ test_openai_requires_key_for_default_url() {
 
 test_openai_works_without_key_for_custom_url() {
     unset OPENAI_API_KEY
+    unset ZSH_AI_OPENAI_API_KEY
     export ZSH_AI_PROVIDER="openai"
     export ZSH_AI_OPENAI_URL="http://localhost:8080/v1/chat/completions"
 
-    local result=$(_zsh_ai_validate_config 2>&1)
+    local result
+    result=$(_zsh_ai_validate_config 2>&1)
     local exit_code=$?
 
     # Should pass validation without API key
@@ -311,6 +259,7 @@ test_openai_works_without_key_for_custom_url() {
 
 test_openai_query_without_auth_header() {
     unset OPENAI_API_KEY
+    unset ZSH_AI_OPENAI_API_KEY
     export ZSH_AI_PROVIDER="openai"
     export ZSH_AI_OPENAI_MODEL="local-model"
     export ZSH_AI_OPENAI_URL="http://localhost:8080/v1/chat/completions"
@@ -367,7 +316,125 @@ test_openai_query_with_auth_header_when_key_set() {
     return 0
 }
 
-test_openai_requires_key_for_default_url && echo "✓ Requires API key for default OpenAI URL"
-test_openai_works_without_key_for_custom_url && echo "✓ Works without API key for custom URL"
-test_openai_query_without_auth_header && echo "✓ Omits Authorization header when no API key"
-test_openai_query_with_auth_header_when_key_set && echo "✓ Includes Authorization header when API key is set"
+test_openai_zsh_ai_key_passes_validation_for_default_url() {
+    unset OPENAI_API_KEY
+    export ZSH_AI_OPENAI_API_KEY="sk-custom-key"
+    export ZSH_AI_PROVIDER="openai"
+    export ZSH_AI_OPENAI_URL="https://api.openai.com/v1/chat/completions"
+
+    local result
+    result=$(_zsh_ai_validate_config 2>&1)
+    local exit_code=$?
+
+    # Should pass validation since ZSH_AI_OPENAI_API_KEY is set
+    assert_equals "$exit_code" "0"
+}
+
+test_openai_zsh_ai_key_takes_precedence() {
+    export OPENAI_API_KEY="original-key"
+    export ZSH_AI_OPENAI_API_KEY="override-key"
+    export ZSH_AI_PROVIDER="openai"
+    export ZSH_AI_OPENAI_MODEL="gpt-5.4-mini"
+    export ZSH_AI_OPENAI_URL="https://api.openai.com/v1/chat/completions"
+    local curl_args_file=$(mktemp)
+
+    curl() {
+        if [[ "$*" == *"api.openai.com"* ]]; then
+            echo "$*" > "$curl_args_file"
+            echo '{"choices":[{"message":{"content":"ls -la"}}]}'
+            return 0
+        fi
+        command curl "$@"
+    }
+
+    _zsh_ai_query_openai "list files" >/dev/null
+    local curl_args=$(cat "$curl_args_file")
+    rm -f "$curl_args_file"
+
+    # Should use the override key, not the original
+    if [[ "$curl_args" != *"override-key"* ]]; then
+        echo "FAIL: ZSH_AI_OPENAI_API_KEY should take precedence"
+        return 1
+    fi
+    if [[ "$curl_args" == *"original-key"* ]]; then
+        echo "FAIL: OPENAI_API_KEY should not be used when ZSH_AI_OPENAI_API_KEY is set"
+        return 1
+    fi
+    return 0
+}
+
+test_openai_falls_back_to_openai_api_key() {
+    unset ZSH_AI_OPENAI_API_KEY
+    export OPENAI_API_KEY="fallback-key"
+    export ZSH_AI_PROVIDER="openai"
+    export ZSH_AI_OPENAI_MODEL="gpt-5.4-mini"
+    export ZSH_AI_OPENAI_URL="https://api.openai.com/v1/chat/completions"
+    local curl_args_file=$(mktemp)
+
+    curl() {
+        if [[ "$*" == *"api.openai.com"* ]]; then
+            echo "$*" > "$curl_args_file"
+            echo '{"choices":[{"message":{"content":"ls -la"}}]}'
+            return 0
+        fi
+        command curl "$@"
+    }
+
+    _zsh_ai_query_openai "list files" >/dev/null
+    local curl_args=$(cat "$curl_args_file")
+    rm -f "$curl_args_file"
+
+    # Should fall back to OPENAI_API_KEY
+    if [[ "$curl_args" != *"fallback-key"* ]]; then
+        echo "FAIL: Should fall back to OPENAI_API_KEY when ZSH_AI_OPENAI_API_KEY is not set"
+        return 1
+    fi
+    return 0
+}
+
+run_test "Requires API key for default OpenAI URL" test_openai_requires_key_for_default_url
+run_test "Works without API key for custom URL" test_openai_works_without_key_for_custom_url
+run_test "Omits Authorization header when no API key" test_openai_query_without_auth_header
+run_test "Includes Authorization header when API key is set" test_openai_query_with_auth_header_when_key_set
+run_test "ZSH_AI_OPENAI_API_KEY passes validation for default URL" test_openai_zsh_ai_key_passes_validation_for_default_url
+run_test "ZSH_AI_OPENAI_API_KEY takes precedence over OPENAI_API_KEY" test_openai_zsh_ai_key_takes_precedence
+run_test "Falls back to OPENAI_API_KEY when ZSH_AI_OPENAI_API_KEY is not set" test_openai_falls_back_to_openai_api_key
+
+# Tests for ZSH_AI_OPENAI_THINKING
+echo ""
+echo "Running OpenAI-compatible thinking flag tests..."
+
+test_openai_thinking_unset_omits_param() {
+    unset ZSH_AI_OPENAI_THINKING
+    local captured_payload=$(capture_openai_payload_for_model "gpt-5-mini")
+    assert_not_contains "$captured_payload" '"chat_template_kwargs"'
+}
+
+test_openai_thinking_enabled_sets_true() {
+    export ZSH_AI_OPENAI_THINKING=1
+    local captured_payload=$(capture_openai_payload_for_model "gpt-5-mini")
+    assert_contains "$captured_payload" '"enable_thinking": true'
+}
+
+test_openai_thinking_disabled_sets_false() {
+    export ZSH_AI_OPENAI_THINKING=0
+    local captured_payload=$(capture_openai_payload_for_model "gpt-5-mini")
+    assert_contains "$captured_payload" '"enable_thinking": false'
+}
+
+test_openai_thinking_invalid_value_returns_error() {
+    export ZSH_AI_OPENAI_THINKING="invalid"
+
+    local result
+    result=$(_zsh_ai_validate_config 2>&1)
+    local exit_code=$?
+
+    # Should not pass validation since it is not 0, 1, or unset
+    assert_equals "$exit_code" "1"
+}
+
+run_test "ZSH_AI_OPENAI_THINKING unset omits chat_template_kwargs parameter" test_openai_thinking_unset_omits_param
+run_test "ZSH_AI_OPENAI_THINKING=1 sets enable_thinking true" test_openai_thinking_enabled_sets_true
+run_test "ZSH_AI_OPENAI_THINKING=0 sets enable_thinking false" test_openai_thinking_disabled_sets_false
+run_test "Invalid ZSH_AI_OPENAI_THINKING value returns error" test_openai_thinking_invalid_value_returns_error
+finish_tests

@@ -1,49 +1,24 @@
 #!/usr/bin/env zsh
 
-# OpenAI API provider for zsh-ai
+# Qwen API provider for zsh-ai
 
-_zsh_ai_openai_supports_temperature() {
-    local model="$1"
-
-    # These OpenAI reasoning models reject non-default temperature values.
-    [[ "$model" != gpt-5* && "$model" != o1* && "$model" != o3* && "$model" != o4* ]]
-}
-
-# Function to call OpenAI API
-_zsh_ai_query_openai() {
+# Function to call Qwen API
+_zsh_ai_query_qwen() {
     local query="$1"
     local response
-
+    
     # Build context
     local context=$(_zsh_ai_build_context)
     local escaped_context=$(_zsh_ai_escape_json "$context")
     local system_prompt=$(_zsh_ai_get_system_prompt "$escaped_context")
     local escaped_system_prompt=$(_zsh_ai_escape_json "$system_prompt")
-
+    
     # Prepare the JSON payload - escape quotes in the query
     local escaped_query=$(_zsh_ai_escape_json "$query")
 
-    # Determine token parameter based on model (newer models use max_completion_tokens)
-    local token_param="max_completion_tokens"
-    if [[ "$ZSH_AI_OPENAI_MODEL" == gpt-4* ]] || [[ "$ZSH_AI_OPENAI_MODEL" == gpt-3.5* ]]; then
-        token_param="max_tokens"
-    fi
-
-    local temperature_param=""
-    if _zsh_ai_openai_supports_temperature "$ZSH_AI_OPENAI_MODEL"; then
-        temperature_param=$',\n    "temperature": 0.3'
-    fi
-
-    local thinking_param=""
-    case "$ZSH_AI_OPENAI_THINKING" in
-        "") ;; # Don't override upstream defaults when unset
-        0) thinking_param=$',\n    "chat_template_kwargs": { "enable_thinking": false }' ;;
-        1) thinking_param=$',\n    "chat_template_kwargs": { "enable_thinking": true }' ;;
-    esac
-
     local json_payload=$(cat <<EOF
 {
-    "model": "${ZSH_AI_OPENAI_MODEL}",
+    "model": "${ZSH_AI_QWEN_MODEL}",
     "messages": [
         {
             "role": "system",
@@ -54,30 +29,23 @@ _zsh_ai_query_openai() {
             "content": "$escaped_query"
         }
     ],
-    "$token_param": 256${temperature_param}${thinking_param}
+    "max_tokens": 256,
+    "temperature": 0.3
 }
 EOF
 )
-
-    # Call the API - only add auth header if API key is set
-    # ZSH_AI_OPENAI_API_KEY takes precedence (useful for LiteLLM and other proxies)
-    local auth_args=()
-    local api_key="${ZSH_AI_OPENAI_API_KEY:-$OPENAI_API_KEY}"
-    [[ -n "$api_key" ]] && auth_args=(--header "Authorization: Bearer $api_key")
-
-    response=$(curl -s "${ZSH_AI_OPENAI_URL}" \
-        "${auth_args[@]}" \
+    
+    # Call the API
+    response=$(curl -s "${ZSH_AI_QWEN_URL}" \
+        --header "Authorization: Bearer $QWEN_API_KEY" \
         --header "content-type: application/json" \
         --data "$json_payload" 2>&1)
-
+    
     if [[ $? -ne 0 ]]; then
-        echo "Error: Failed to connect to OpenAI API"
+        echo "Error: Failed to connect to QWEN API"
         return 1
     fi
-
-    # Debug: Uncomment to see raw response
-    # echo "DEBUG: Raw response: $response" >&2
-
+    
     # Extract the content from the response
     # Try using jq if available, otherwise fall back to sed/grep
     if command -v jq &> /dev/null; then
