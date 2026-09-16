@@ -26,12 +26,8 @@ _zsh_ai_query() {
     local query="$1"
 
     if [[ "$ZSH_AI_PROVIDER" == "ollama" ]]; then
-        # Check if Ollama is running first
-        if ! _zsh_ai_check_ollama; then
-            echo "Error: Ollama is not running at $ZSH_AI_OLLAMA_URL"
-            echo "Start Ollama with: ollama serve"
-            return 1
-        fi
+        # The check prints its own user-facing error when Ollama is unreachable
+        _zsh_ai_check_ollama || return 1
         _zsh_ai_query_ollama "$query"
     elif [[ "$ZSH_AI_PROVIDER" == "gemini" ]]; then
         _zsh_ai_query_gemini "$query"
@@ -43,23 +39,10 @@ _zsh_ai_query() {
         _zsh_ai_query_grok "$query"
     elif [[ "$ZSH_AI_PROVIDER" == "mistral" ]]; then
         _zsh_ai_query_mistral "$query"
-    else
+    elif [[ "$ZSH_AI_PROVIDER" == "custom" ]]; then
+        _zsh_ai_query_custom "$query"
+	else
         _zsh_ai_query_anthropic "$query"
-    fi
-}
-
-# Shared function to handle AI command execution
-_zsh_ai_execute_command() {
-    local query="$1"
-    local cmd=$(_zsh_ai_query "$query")
-    
-    if [[ -n "$cmd" ]] && [[ "$cmd" != "Error:"* ]] && [[ "$cmd" != "API Error:"* ]]; then
-        echo "$cmd"
-        return 0
-    else
-        # Return error
-        echo "$cmd"
-        return 1
     fi
 }
 
@@ -99,7 +82,8 @@ zsh-ai() {
     setopt local_options no_monitor no_notify no_bg_nice
 
     # Start the API query in background
-    (_zsh_ai_execute_command "$query" > "$tmpfile" 2>/dev/null) &
+    # >| so the redirect works when the user has noclobber set (mktemp already created the file)
+    (_zsh_ai_query "$query" >| "$tmpfile" 2>/dev/null) &
     local pid=$!
     
     # Animate while waiting

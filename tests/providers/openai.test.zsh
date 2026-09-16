@@ -33,6 +33,7 @@ EOF
 test_openai_query_success() {
     export OPENAI_API_KEY="test-key"
     export ZSH_AI_OPENAI_MODEL="gpt-5.4-mini"
+    export ZSH_AI_OPENAI_URL="https://api.openai.com/v1/chat/completions"
 
     local result=$(_zsh_ai_query_openai "list files")
     assert_equals "$result" "ls -la"
@@ -41,6 +42,7 @@ test_openai_query_success() {
 test_openai_query_error_response() {
     export OPENAI_API_KEY="test-key"
     export ZSH_AI_OPENAI_MODEL="gpt-5.4-mini"
+    export ZSH_AI_OPENAI_URL="https://api.openai.com/v1/chat/completions"
     
     # Override curl to return an error
     curl() {
@@ -431,10 +433,87 @@ test_openai_thinking_invalid_value_returns_error() {
 
     # Should not pass validation since it is not 0, 1, or unset
     assert_equals "$exit_code" "1"
+    unset ZSH_AI_OPENAI_THINKING
 }
 
 run_test "ZSH_AI_OPENAI_THINKING unset omits chat_template_kwargs parameter" test_openai_thinking_unset_omits_param
 run_test "ZSH_AI_OPENAI_THINKING=1 sets enable_thinking true" test_openai_thinking_enabled_sets_true
 run_test "ZSH_AI_OPENAI_THINKING=0 sets enable_thinking false" test_openai_thinking_disabled_sets_false
 run_test "Invalid ZSH_AI_OPENAI_THINKING value returns error" test_openai_thinking_invalid_value_returns_error
+
+# Tests for ZSH_AI_OPENAI_REASONING_EFFORT
+echo ""
+echo "Running OpenAI-compatible reasoning effort tests..."
+
+test_openai_reasoning_effort_unset_omits_param() {
+    export ZSH_AI_PROVIDER="openai"
+    unset ZSH_AI_OPENAI_THINKING
+    unset ZSH_AI_OPENAI_REASONING_EFFORT
+    local captured_payload=$(capture_openai_payload_for_model "qwen/qwen3.6-27b")
+    assert_not_contains "$captured_payload" '"reasoning_effort"'
+}
+
+test_openai_reasoning_effort_sets_value() {
+    export ZSH_AI_PROVIDER="openai"
+    unset ZSH_AI_OPENAI_THINKING
+    export ZSH_AI_OPENAI_REASONING_EFFORT="none"
+    local captured_payload=$(capture_openai_payload_for_model "qwen/qwen3.6-27b")
+    unset ZSH_AI_OPENAI_REASONING_EFFORT
+    assert_contains "$captured_payload" '"reasoning_effort": "none"'
+}
+
+test_openai_reasoning_effort_escapes_value() {
+    export ZSH_AI_PROVIDER="openai"
+    unset ZSH_AI_OPENAI_THINKING
+    export ZSH_AI_OPENAI_REASONING_EFFORT='custom"tier'
+    local captured_payload=$(capture_openai_payload_for_model "qwen/qwen3.6-27b")
+    unset ZSH_AI_OPENAI_REASONING_EFFORT
+    assert_contains "$captured_payload" '"reasoning_effort": "custom\"tier"'
+}
+
+
+# Tests for ZSH_AI_OPENAI_MAX_TOKENS
+echo ""
+echo "Running OpenAI-compatible max tokens tests..."
+
+test_openai_max_tokens_defaults_to_256() {
+    unset ZSH_AI_OPENAI_MAX_TOKENS
+    source "${PLUGIN_DIR}/lib/config.zsh"
+    local captured_payload=$(capture_openai_payload_for_model "gpt-5-mini")
+    assert_contains "$captured_payload" '"max_completion_tokens": 256'
+}
+
+test_openai_max_tokens_uses_custom_value() {
+    export ZSH_AI_OPENAI_MAX_TOKENS=2048
+    local captured_payload=$(capture_openai_payload_for_model "gpt-5-mini")
+    unset ZSH_AI_OPENAI_MAX_TOKENS
+    assert_contains "$captured_payload" '"max_completion_tokens": 2048'
+}
+
+test_openai_max_tokens_invalid_value_returns_error() {
+    export ZSH_AI_OPENAI_MAX_TOKENS="abc"
+    local result
+    result=$(_zsh_ai_validate_config 2>&1)
+    local exit_code=$?
+    assert_equals "$exit_code" "1"
+    unset ZSH_AI_OPENAI_MAX_TOKENS
+    assert_contains "$result" "ZSH_AI_OPENAI_MAX_TOKENS must be a positive integer"
+}
+
+test_openai_max_tokens_invalid_fallback_to_256() {
+    export ZSH_AI_OPENAI_MAX_TOKENS="invalid"
+    local captured_payload=$(capture_openai_payload_for_model "gpt-5-mini")
+    unset ZSH_AI_OPENAI_MAX_TOKENS
+    assert_contains "$captured_payload" '"max_completion_tokens": 256'
+}
+
+run_test "ZSH_AI_OPENAI_MAX_TOKENS defaults to 256" test_openai_max_tokens_defaults_to_256
+run_test "ZSH_AI_OPENAI_MAX_TOKENS uses custom value" test_openai_max_tokens_uses_custom_value
+run_test "ZSH_AI_OPENAI_MAX_TOKENS invalid value returns error" test_openai_max_tokens_invalid_value_returns_error
+run_test "ZSH_AI_OPENAI_MAX_TOKENS invalid value falls back to 256 at runtime" test_openai_max_tokens_invalid_fallback_to_256
+
+run_test "ZSH_AI_OPENAI_REASONING_EFFORT unset omits reasoning_effort parameter" test_openai_reasoning_effort_unset_omits_param
+run_test "ZSH_AI_OPENAI_REASONING_EFFORT sets reasoning_effort value" test_openai_reasoning_effort_sets_value
+run_test "ZSH_AI_OPENAI_REASONING_EFFORT escapes reasoning_effort value" test_openai_reasoning_effort_escapes_value
 finish_tests
+
